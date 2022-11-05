@@ -89,7 +89,7 @@ def isCityRight(update, context):
         filesDict[userID]['file'] = None
         filesDict[userID]['date'] = None
         keyboard = [
-            [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/werjkwlkrj')],
+            [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/e1evatoronion')],
             [InlineKeyboardButton("Отправить еще фото", callback_data="one more photo")],
         ]
         query.edit_message_text(text=f"Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -114,7 +114,7 @@ def cityChanged(update, context):
         filesDict[userID]['file'] = None
         filesDict[userID]['date'] = None
         keyboard = [
-            [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/werjkwlkrj')],
+            [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/e1evatoronion')],
             [InlineKeyboardButton("Отправить еще фото", callback_data="one more photo")],
         ]
         update.message.reply_text("Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -140,13 +140,13 @@ def recieveCity(update, context):
         filesDict[userID]['file'] = None
         filesDict[userID]['date'] = None
         keyboard = [
-            [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/werjkwlkrj')],
+            [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/e1evatoronion')],
             [InlineKeyboardButton("Отправить еще фото", callback_data="one more photo")],
         ]
         update.message.reply_text("Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
         return ConversationHandler.END
     else:
-        update.message.reply_text("Что-то пошло не так, попробуй еще раз: /start")
+        update.message.reply_text("Что-то пошло не так, попробуй еще раз:\n/start")
         filesDict.clear()
         return ConversationHandler.END
 
@@ -206,7 +206,7 @@ def main():
     updater.start_webhook(listen="0.0.0.0",
                           port=int(PORT),
                           url_path=TOKEN)
-    updater.bot.setWebhook('https://breakfastname.herokuapp.com/' + TOKEN)
+    updater.bot.setWebhook('https://e1evatoronion-bot.herokuapp.com/' + TOKEN)
 
     updater.idle()
 
