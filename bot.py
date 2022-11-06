@@ -1,7 +1,9 @@
-import logging
-import datetime
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, ConversationHandler
 from telegram import ParseMode, InlineKeyboardMarkup, InlineKeyboardButton
+from mongodb import mdb, search_or_save_user, add_date, add_city, search_user
+from settings import TOKEN
+import logging
+import datetime
 import os
 
 PORT = int(os.environ.get('PORT', 5000))
@@ -10,8 +12,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
-TOKEN = ''
-filesDict = {}
+
 DATE, PHOTO, CITY, ISTODAY, CHANGECITY, ISCITYRIGHT = range(6)
 
 def start(update, context):   
@@ -21,27 +22,19 @@ def start(update, context):
             query.edit_message_text("Присылай фото :)")
             return PHOTO
         else:
-            return PHOTO
+            query.edit_message_text("Что-то пошло не так, попробуй еще раз: /start")
+            return ConversationHandler.END
     else:
         update.message.reply_text("Привет! Я помогу отправить твое фото в канал [Лифтолук](https://t.me/e1evatoronion), пришли мне его в ответ на это сообщение :)", ParseMode.MARKDOWN, disable_web_page_preview=True)
         return PHOTO
 
 def recievePhoto(update, context):
-    global filesDict
-
     fileID = update.message['photo'][-1]['file_id']
     userID = update.message.chat.id
-    
-    if filesDict.get(userID):
-        filesDict[userID]['file'] = fileID
-        filesDict[userID]['date'] = None
-    else:
-        newElement = {userID: {'file':fileID, 'city':None, 'date' : None}}
-        filesDict.update(newElement)
-    
+    search_or_save_user(mdb, userID, fileID)
+
     keyboard = [
         [
-            # ПОДУМАТЬ ЧТО ДОБАВИТЬ ЧТОБЫ УБРАТЬ СЛОВО "ЗАГРУЗКА"
             InlineKeyboardButton("Да", callback_data="today"),
             InlineKeyboardButton("Нет", callback_data="notToday"),
         ]
@@ -50,24 +43,23 @@ def recievePhoto(update, context):
     return ISTODAY
 
 def keyboard_today_callback(update, context):
-    global filesDict
-
     query = update.callback_query
     userID = query.message.chat.id
+    date = (datetime.datetime.now() + datetime.timedelta(hours=3)).strftime('%d.%m.%Y')
+    user = search_user(mdb, userID)
 
-    if query.data == 'today' and filesDict[userID]['city']:
-        date = (datetime.datetime.now() + datetime.timedelta(hours=3)).strftime('%d.%m.%Y')
-        filesDict[userID]['date'] = date
+    if query.data == 'today' and user['city']:
+        add_date(mdb, userID, date)
         keyboard = [
-            [InlineKeyboardButton("Да", callback_data='cityCorrect'),
-            InlineKeyboardButton("Нет", callback_data="cityWrong")]
+            [
+                InlineKeyboardButton("Да", callback_data='cityCorrect'),
+                InlineKeyboardButton("Нет", callback_data="cityWrong")
+            ]
         ]
-        city = filesDict[userID]['city']
-        query.edit_message_text(text=f"Подскажи, это город {city.title()}?", reply_markup=InlineKeyboardMarkup(keyboard))
+        query.edit_message_text(text=f"Подскажи, это город {user['city'].title()}?", reply_markup=InlineKeyboardMarkup(keyboard))
         return ISCITYRIGHT
-    elif query.data == 'today' and filesDict[userID]['city'] == None:
-        date = (datetime.datetime.now() + datetime.timedelta(hours=3)).strftime('%d.%m.%Y')
-        filesDict[userID]['date'] = date
+    elif query.data == 'today' and not user['city']:
+        add_date(mdb, userID, date)
         query.edit_message_text(text=f"Клёва! Подскажи город, в котором сделано это фото")
         return CITY
     else:
@@ -75,19 +67,16 @@ def keyboard_today_callback(update, context):
         return DATE
 
 def isCityRight(update, context):
-    global filesDict
-
     query = update.callback_query
     userID = query.message.chat.id
 
     if query.data == 'cityCorrect':
-        date = filesDict[userID]['date']
-        city = filesDict[userID]['city']
-        context.bot.sendPhoto(chat_id = -1001514609298,
+        user = search_user(mdb, userID)
+        date = user['date']
+        city = user['city']
+        context.bot.sendPhoto(chat_id = -1001829784872,
                               caption = f'{date}\n{city.title()}',
-                              photo = filesDict[userID]['file'])
-        filesDict[userID]['file'] = None
-        filesDict[userID]['date'] = None
+                              photo = user['file_id'])
         keyboard = [
             [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/e1evatoronion')],
             [InlineKeyboardButton("Отправить еще фото", callback_data="one more photo")],
@@ -99,78 +88,60 @@ def isCityRight(update, context):
         return CHANGECITY
 
 def cityChanged(update, context):
-    global filesDict
-
     userID = update.message.chat.id
-    filesDict[userID]['city'] = update.message.text
-    city = filesDict[userID]['city']
-
-    if filesDict[userID]['city'] and filesDict[userID]['file'] and filesDict[userID]['date']:
-        date = filesDict[userID]['date']
-        city = filesDict[userID]['city']
-        context.bot.sendPhoto(chat_id = -1001514609298,
+    city = update.message.text
+    add_city(mdb, userID, city)
+    user = search_user(mdb, userID)
+    date = user['date']
+    city = user['city']
+    
+    context.bot.sendPhoto(chat_id = -1001829784872,
                             caption = f'{date}\n{city.title()}',
-                            photo = filesDict[userID]['file'])
-        filesDict[userID]['file'] = None
-        filesDict[userID]['date'] = None
-        keyboard = [
+                            photo = user['file_id'])
+    keyboard = [
             [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/e1evatoronion')],
             [InlineKeyboardButton("Отправить еще фото", callback_data="one more photo")],
         ]
-        update.message.reply_text("Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
-        return ConversationHandler.END
-    else:
-        update.message.reply_text("Что-то пошло не так, попробуй еще раз: /start")
-        filesDict.clear()
-        return ConversationHandler.END
+    update.message.reply_text("Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
+    return ConversationHandler.END
 
 def recieveCity(update, context):
-    global filesDict
-
     userID = update.message.chat.id
-    filesDict[userID]['city'] = update.message.text
-    city = filesDict[userID]['city']
-
-    if filesDict[userID]['city'] and filesDict[userID]['file'] and filesDict[userID]['date']:
-        date = filesDict[userID]['date']
-        city = filesDict[userID]['city']
-        context.bot.sendPhoto(chat_id = -1001514609298,
+    city = update.message.text
+    add_city(mdb, userID, city)
+    user = search_user(mdb, userID)
+    date = user['date']
+    city = user['city']
+    
+    context.bot.sendPhoto(chat_id = -1001829784872,
                             caption = f'{date}\n{city.title()}',
-                            photo = filesDict[userID]['file'])
-        filesDict[userID]['file'] = None
-        filesDict[userID]['date'] = None
-        keyboard = [
+                            photo = user['file_id'])
+    keyboard = [
             [InlineKeyboardButton("Посмотреть в Лифтолук", url='https://t.me/e1evatoronion')],
             [InlineKeyboardButton("Отправить еще фото", callback_data="one more photo")],
         ]
-        update.message.reply_text("Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
-        return ConversationHandler.END
-    else:
-        update.message.reply_text("Что-то пошло не так, попробуй еще раз:\n/start")
-        filesDict.clear()
-        return ConversationHandler.END
+    update.message.reply_text("Отправляю собирать лайки :)", reply_markup=InlineKeyboardMarkup(keyboard))
+    return ConversationHandler.END
 
 def recieveDate(update, context):
-    global filesDict
-
-    date = update.message.text
     userID = update.message.chat.id
+    date = update.message.text
+    add_date(mdb, userID, date)
+    user = search_user(mdb, userID)
 
-    if filesDict[userID]['city']:
-        filesDict[userID]['date'] = date
+    if user['city']:
+        city = user['city']
         keyboard = [
             [InlineKeyboardButton("Да", callback_data='cityCorrect'),
             InlineKeyboardButton("Нет", callback_data="cityWrong")]
         ]
-        city = filesDict[userID]['city']
         update.message.reply_text(f"Подскажи, это город {city.title()}?", reply_markup=InlineKeyboardMarkup(keyboard))
         return ISCITYRIGHT
-    elif filesDict[userID]['city'] == None:
-        filesDict[userID]['date'] = date
+    elif not user['city']:
         update.message.reply_text('Подскажи пожалуйста город, в котором сделано фото')
         return CITY
     else:
-        update.message.reply_text('Хм, не могу найти фотографию. Попробуй пожалуйста отправить фото снова')
+        update.message.reply_text('Хм, не могу найти фотографию. Попробуй пожалуйста отправить фото снова: /start')
         return PHOTO
 
 def cancel(update, context):
