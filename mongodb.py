@@ -4,9 +4,9 @@ from settings import MONGODB, MONGODB_LINK
 mdb = MongoClient(MONGODB_LINK)[MONGODB]
 
 def search_or_save_user(mdb, userID, fileID):
-    # поиск в коллекции users по user.id
+    # Search in 'users' collection by user.id
     user = mdb.users.find_one({'user_id': userID})
-    # если его нет, то создаем словарь
+    # Create user if DB does not have him
     if not user:
         user = {
             'user_id': userID,
@@ -16,10 +16,8 @@ def search_or_save_user(mdb, userID, fileID):
         }
         mdb.users.insert_one(user)
     else:
-        user = {
-            'file_id': fileID,
-            'date': None
-        }
+        mdb.users.update_one({'user_id': userID}, {'$set': {'file_id': fileID}})
+    
     return user
 
 def search_user(mdb, userID):
@@ -31,3 +29,6 @@ def add_date(mdb, userID, date):
 
 def add_city(mdb, userID, city):
     mdb.users.update_one({'user_id': userID}, {'$set': {'city': city}})
+
+def add_feedback(mdb, feedback):
+    mdb.feedback.insert_one({'feedback': feedback})
