@@ -1,8 +1,8 @@
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, ConversationHandler
 from telegram import ParseMode
 from settings import TOKEN, HEROKU_APP
-from answers import *
-from handlers import *
+from src.answers import *
+from src.handlers import *
 import logging
 import os
 
@@ -40,16 +40,10 @@ def start(update, context):
             return PHOTO
         else:
             update.message.reply_text(HI_ANSWER, ParseMode.MARKDOWN, disable_web_page_preview=True)
-            # context.job_queue.run_repeating(seeYa, interval=1, first=300, context=update.message.chat_id)
             return PHOTO
     else:
         update.message.reply_text(STOP_ANSWER)
         return ConversationHandler.END
-
-# def seeYa(context):
-#     chat_id=context.job.context
-#     context.bot.send_message(chat_id=chat_id, 
-#                              text="Вы еще тут?")
 
 def stop(update, context):
     context.bot.send_message(chat_id=update.message.chat_id, text=STOP_ANSWER)
@@ -61,7 +55,7 @@ def error(update, context):
 
 def main():
     updater = Updater(TOKEN, use_context=True)
-    # Get the dispatcher to register handlers
+
     dp = updater.dispatcher
 
     conv_handler = ConversationHandler(
@@ -79,10 +73,8 @@ def main():
 
     dp.add_handler(conv_handler)
     
-    # log all errors
     dp.add_error_handler(error)
 
-    # Start the Bot
     updater.start_webhook(listen="0.0.0.0",
                           port=int(PORT),
                           url_path=TOKEN)
